@@ -1,0 +1,415 @@
+// ==========================================
+// VARIABLES GLOBALES
+// ==========================================
+const ID_HOJA = '1XCyP9CFd-QV37Gnyb4tWdoC8K9xruclE7CLP74vLPtk'; 
+const ID_CARPETA_RAIZ = '1d8ifrLdrWBKDxG1mHjiagZikSlFhAh6I'; 
+
+
+
+// ==========================================
+// SERVIDOR WEB (Despliegue)
+// ==========================================
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+      .setTitle('Registro de Laboratorio - ON')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+// ==========================================
+// INTEGRACIÓN CON CATÁLOGO (PROYECTO PRINCIPAL)
+// ==========================================
+function obtenerDatosCatalogo(codigo) {
+  // Limpiamos el código ingresado para evitar errores de espacios o mayúsculas
+  const cod = (codigo || '').toString().toUpperCase().trim();
+  
+  // =========================================================
+  // EJEMPLO QUEMADO SOLICITADO: ELE-006-031
+  // =========================================================
+  if (cod === 'ELE-006-031') {
+    return {
+      descripcion: 'MONITOR 55” TOUCH KORTEK',
+      refacciones: [
+        { codigo: 'VID-001-053', descripcion: 'Cristal táctil 55"' },
+        { codigo: 'ELE-001-018', descripcion: 'Panel pantalla 55"' },
+        { codigo: 'PLE-002-049', descripcion: 'Placa control táctil' },
+        { codigo: 'PLE-003-036', descripcion: 'AD BOARD' }
+      ]
+    };
+  }
+  
+  // =========================================================
+  // LÓGICA DE CONEXIÓN AL PROYECTO PRINCIPAL (FUTURO)
+  // Cuando desees conectarlo con tu archivo de catálogo en Drive,
+  // descomenta el siguiente bloque y pon tu ID real:
+  // =========================================================
+  ///*
+  try {
+      const idCatalogo = '1ziisVVwzI9SpPCBBjO0yS5z0On4sqLiNr1V74SGVhWk';
+      const hojaCat = SpreadsheetApp.openById(idCatalogo).getSheetByName('JR CONCEPT');
+      const datosCat = hojaCat.getDataRange().getValues();
+      
+      // Aquí buscarías el código en datosCat y extraerías la info
+  return { descripcion: "...", refacciones: [ {codigo: "...", descripcion: "..."} ] };
+  } catch(e) {
+      // Manejar error
+  }
+ // */
+
+  // Si no se encuentra en la base de datos o el ejemplo, se devuelve vacío
+  return {
+    descripcion: '',
+    refacciones: []
+  };
+
+}
+
+// ==========================================
+// PROCESAMIENTO DEL FORMULARIO Y GUARDADO (BLINDADO)
+// ==========================================
+function procesarFormulario(datos) {
+  try {
+    let urlCarpeta = "Sin archivos";
+    let nuevaCarpeta = null;
+    
+    // 1. Manejo Seguro de Carpeta y Archivos en Drive
+    if (ID_CARPETA_RAIZ && ID_CARPETA_RAIZ !== '') {
+        try {
+            let fechaStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd_HHmmss");
+            let nombreCarpeta = datos.laboratorio + '_' + datos.codigo + '_' + fechaStr;
+            
+            // Intentar buscar la carpeta por ID
+            let carpetaPadre = DriveApp.getFolderById(ID_CARPETA_RAIZ);
+            nuevaCarpeta = carpetaPadre.createFolder(nombreCarpeta);
+            urlCarpeta = nuevaCarpeta.getUrl();
+        } catch (errorDrive) {
+            // SI FALLA ENCONTRAR EL ID, CREA LA CARPETA EN LA RAÍZ DEL DRIVE AUTOMÁTICAMENTE
+            let fechaStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd_HHmmss");
+            let nombreCarpeta = "Recuperado_" + datos.laboratorio + '_' + datos.codigo + '_' + fechaStr;
+            nuevaCarpeta = DriveApp.createFolder(nombreCarpeta);
+            urlCarpeta = nuevaCarpeta.getUrl() + " (Aviso: ID de carpeta original no encontrado)";
+        }
+
+        // Subir archivos a la carpeta generada
+        if(datos.archivosBase64 && datos.archivosBase64.length > 0 && nuevaCarpeta) {
+            datos.archivosBase64.forEach(fileData => {
+                let blob = Utilities.newBlob(Utilities.base64Decode(fileData.bytes), fileData.mimeType, fileData.filename);
+                nuevaCarpeta.createFile(blob);
+            });
+        }
+    }
+    
+    // 2. Guardar en Google Sheets de forma SEGURA usando getActiveSpreadsheet()
+    // Esto evita usar el ID duro del documento.
+    let ss = SpreadsheetApp.getActiveSpreadsheet();
+    let hoja = ss.getSheetByName('Seguimiento_de_contenido'); 
+    if(!hoja) hoja = ss.getSheets()[0];
+    
+    let maxCol = hoja.getLastColumn() < 1 ? 1 : hoja.getLastColumn();
+    let headers = hoja.getRange(1, 1, 1, maxCol).getValues()[0];
+    
+    // Limpiar celdas vacías al final de los encabezados
+    while(headers.length > 0 && headers[headers.length-1] === "") headers.pop();
+    
+    // 3. Garantizar que existan las nuevas columnas fijas
+    const coreHeaders = [
+      'Responsable', 'Laboratorio', 'Código', 'Código Anterior', 'Descripción', 
+      'Modelo', 'Número de serie del equipo', 'QR', 'Garantía', 'Consigna', 
+      'Categoría', 'Fecha de revisión', 'Estado', 'Procedencia', 'Detalles', 'Solución de la falla'
+    ];
+    coreHeaders.forEach(h => {
+        if (!headers.includes(h)) headers.push(h);
+    });
+    
+    // 4. Garantizar que existan las columnas de refacciones
+    let maxRefIndex = datos.refacciones.length;
+    for (let i = 1; i <= maxRefIndex; i++) {
+        let codColName = 'Código R' + i;
+        let descColName = 'Descripción R' + i;
+        let cantColName = 'Cantidad R' + i;
+        if (!headers.includes(codColName)) headers.push(codColName);
+        if (!headers.includes(descColName)) headers.push(descColName);
+        if (!headers.includes(cantColName)) headers.push(cantColName);
+    }
+    
+    // 5. Garantizar que la columna "Archivo" siempre quede al final
+    if (!headers.includes('Archivo')) {
+        headers.push('Archivo');
+    } else {
+        let archivoIdx = headers.indexOf('Archivo');
+        headers.splice(archivoIdx, 1);
+        headers.push('Archivo');
+    }
+    
+    // Actualizar encabezados físicamente en la fila 1
+    hoja.getRange(1, 1, 1, headers.length).setValues([headers]);
+    
+    // 6. Volcar los datos en el array
+    let rowData = new Array(headers.length).fill("");
+    function setVal(headerName, val) {
+        let idx = headers.indexOf(headerName);
+        if(idx !== -1) rowData[idx] = val;
+    }
+    
+    // Datos Generales y Diagnóstico
+    setVal('Responsable', datos.responsable);
+    setVal('Laboratorio', datos.laboratorio); 
+    setVal('Código', datos.codigo);
+    setVal('Código Anterior', datos.codigoAnt);
+    setVal('Descripción', datos.descripcion);
+    setVal('Modelo', datos.modelo);
+    setVal('Número de serie del equipo', datos.numSerie);
+    setVal('QR', datos.qr);
+    setVal('Garantía', datos.garantia);
+    setVal('Consigna', datos.consigna);
+    setVal('Categoría', datos.categoria);
+    setVal('Fecha de revisión', datos.fecha);
+    setVal('Estado', datos.estado);
+    setVal('Procedencia', datos.procedencia);
+    setVal('Detalles', datos.detalles);
+    setVal('Solución de la falla', datos.solucion);
+    
+    // Refacciones
+    for (let i = 0; i < maxRefIndex; i++) {
+        setVal('Código R' + (i+1), datos.refacciones[i].codigo);
+        setVal('Descripción R' + (i+1), datos.refacciones[i].descripcion);
+        setVal('Cantidad R' + (i+1), datos.refacciones[i].cantidad);
+    }
+    
+    // Archivos
+    setVal('Archivo', urlCarpeta);
+    hoja.appendRow(rowData);
+    
+    return { success: true, urlCarpeta: urlCarpeta };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+// ==========================================
+// SUPER DASHBOARD DIRECTIVO (Ya lo tienes)
+// ==========================================
+function generarDashboardKPIs() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hojaDatos = ss.getSheetByName('Seguimiento_de_contenido');
+  if (!hojaDatos) {
+    SpreadsheetApp.getUi().alert('Error: No se encontró "Seguimiento_de_contenido".');
+    return;
+  }
+  // Mapeo
+  let ultimaCol = hojaDatos.getLastColumn();
+  let encabezados = hojaDatos.getRange(1, 1, 1, ultimaCol).getValues()[0];
+  let colResp = 'A', colCat = 'F', colCod = 'C', colEst = 'H', colProc = 'I', colLab = 'B', colFecha = 'G';
+  let refCols = [];
+  for (let i = 0; i < encabezados.length; i++) {
+    let nombre = encabezados[i];
+    if (!nombre) continue;
+    let letra = obtenerLetraColumna(hojaDatos, nombre);
+    if (nombre === 'Responsable') colResp = letra;
+    if (nombre === 'Categoría') colCat = letra;
+    if (nombre === 'Código') colCod = letra;
+    if (nombre === 'Estado') colEst = letra;
+    if (nombre === 'Procedencia') colProc = letra;
+    if (nombre === 'Laboratorio') colLab = letra;
+    if (nombre === 'Fecha de revisión') colFecha = letra;
+    if (nombre.toString().startsWith('Código R')) refCols.push(letra);
+  }
+  
+  let hojaKPIs = ss.getSheetByName('KPIs_Laboratorio');
+  if (!hojaKPIs) hojaKPIs = ss.insertSheet('KPIs_Laboratorio');
+  else {
+    hojaKPIs.clear(); 
+    let charts = hojaKPIs.getCharts();
+    for (let i = 0; i < charts.length; i++) hojaKPIs.removeChart(charts[i]);
+  }
+  
+  hojaKPIs.getRange('A1:L1').merge();
+  hojaKPIs.getRange('A1').setValue('DASHBOARD DIRECTIVO DE KPIs - LABORATORIO ON')
+          .setFontSize(16).setFontWeight('bold').setBackground('#0d3a66').setFontColor('white').setHorizontalAlignment('center');
+
+  hojaKPIs.getRange('A3').setValue('Filtrar Periodo:').setFontWeight('bold');
+  const reglaFiltro = SpreadsheetApp.newDataValidation().requireValueInList(['Mes Actual', 'Bimestre', 'Semestre', 'Anual', 'Todo el Histórico'], true).build();
+  hojaKPIs.getRange('B3').setDataValidation(reglaFiltro).setValue('Mes Actual').setBackground('#e8f0fe').setFontWeight('bold');
+  
+  hojaKPIs.getRange('C2').setValue('Fecha Inicio');
+  hojaKPIs.getRange('D2').setValue('Fecha Fin');
+  hojaKPIs.getRange('C3').setFormula(`=IF(B3="Mes Actual"; DATE(YEAR(TODAY()); MONTH(TODAY()); 1); IF(B3="Bimestre"; DATE(YEAR(TODAY()); MONTH(TODAY())-1; 1); IF(B3="Semestre"; DATE(YEAR(TODAY()); MONTH(TODAY())-5; 1); IF(B3="Anual"; DATE(YEAR(TODAY()); 1; 1); DATE(2000; 1; 1)))))`).setNumberFormat("dd/MM/yyyy");
+  hojaKPIs.getRange('D3').setFormula(`=IF(B3="Todo el Histórico"; DATE(2100; 12; 31); TODAY())`).setNumberFormat("dd/MM/yyyy");
+  hojaKPIs.getRange('C2:D3').setBackground('#f4f6f9').setHorizontalAlignment('center');
+
+  let filtroFechaQuery = `and ${colFecha} >= date '"&TEXT(C3;"yyyy-mm-dd")&"' and ${colFecha} <= date '"&TEXT(D3;"yyyy-mm-dd")&"'`;
+
+  // BLOQUE 1
+  hojaKPIs.getRange('A5:C5').merge().setValue('1. Estado General de Reparaciones').setFontWeight('bold').setBackground('#0d3a66').setFontColor('white');
+  let fEstado = `=IFERROR(QUERY(Seguimiento_de_contenido!A:Z; "select ${colEst}, count(${colResp}) where ${colEst} is not null ${filtroFechaQuery} group by ${colEst} label ${colEst} 'Estado', count(${colResp}) 'Cantidad'"); "Sin datos en el periodo")`;
+  hojaKPIs.getRange('A6').setFormula(fEstado);
+  
+  let chart1 = hojaKPIs.newChart().setChartType(Charts.ChartType.PIE).addRange(hojaKPIs.getRange('A6:B12')).setPosition(5, 3, 0, 0).setOption('title', 'Estado de Equipos').setOption('is3D', true).setOption('width', 350).setOption('height', 220).build();
+  hojaKPIs.insertChart(chart1);
+
+  hojaKPIs.getRange('G5:I5').merge().setValue('2. Procedencia de los Equipos').setFontWeight('bold').setBackground('#0d3a66').setFontColor('white');
+  let fProc = `=IFERROR(QUERY(Seguimiento_de_contenido!A:Z; "select ${colProc}, count(${colResp}) where ${colProc} is not null ${filtroFechaQuery} group by ${colProc} label ${colProc} 'Procedencia', count(${colResp}) 'Cantidad'"); "Sin datos")`;
+  hojaKPIs.getRange('G6').setFormula(fProc);
+  
+  let chart2 = hojaKPIs.newChart().setChartType(Charts.ChartType.PIE).addRange(hojaKPIs.getRange('G6:H12')).setPosition(5, 9, 0, 0).setOption('title', 'Origen de los Items').setOption('pieHole', 0.4).setOption('width', 350).setOption('height', 220).build();
+  hojaKPIs.insertChart(chart2);
+
+  // BLOQUE 2
+  hojaKPIs.getRange('A17:C17').merge().setValue('3. Top Refacciones Utilizadas').setFontWeight('bold').setBackground('#0d3a66').setFontColor('white');
+  if (refCols.length === 0) refCols = ['M']; 
+  let filterArgs = refCols.map(l => `FILTER(Seguimiento_de_contenido!${l}2:${l}; Seguimiento_de_contenido!${colFecha}2:${colFecha} >= C3; Seguimiento_de_contenido!${colFecha}2:${colFecha} <= D3)`).join('; ');
+  let fRefacciones = `=IFERROR(QUERY(FLATTEN({${filterArgs}}); "select Col1, count(Col1) where Col1 is not null and Col1 <> '' group by Col1 order by count(Col1) desc limit 10 label Col1 'Refacción', count(Col1) 'Uso'"); "Sin datos")`;
+  hojaKPIs.getRange('A18').setFormula(fRefacciones);
+
+  let chart3 = hojaKPIs.newChart().setChartType(Charts.ChartType.BAR).addRange(hojaKPIs.getRange('A18:B28')).setPosition(17, 3, 0, 0).setOption('title', 'Refacciones de Mayor Consumo').setOption('legend', {position: 'none'}).setOption('width', 350).setOption('height', 220).build();
+  hojaKPIs.insertChart(chart3);
+
+  hojaKPIs.getRange('G17:I17').merge().setValue('6. Revisiones por Laboratorio').setFontWeight('bold').setBackground('#0d3a66').setFontColor('white');
+  let fLab = `=IFERROR(QUERY(Seguimiento_de_contenido!A:Z; "select ${colLab}, count(${colResp}) where ${colLab} is not null ${filtroFechaQuery} group by ${colLab} order by count(${colResp}) desc label ${colLab} 'Laboratorio', count(${colResp}) 'Revisiones'"); "Sin datos")`;
+  hojaKPIs.getRange('G18').setFormula(fLab);
+
+  let chart6 = hojaKPIs.newChart().setChartType(Charts.ChartType.COLUMN).addRange(hojaKPIs.getRange('G18:H28')).setPosition(17, 9, 0, 0).setOption('title', 'Volumen por Sucursal').setOption('legend', {position: 'none'}).setOption('width', 350).setOption('height', 220).build();
+  hojaKPIs.insertChart(chart6);
+
+  // BLOQUE 3
+  hojaKPIs.getRange('A29:C29').merge().setValue('7. Aportación de Técnicos (%)').setFontWeight('bold').setBackground('#0d3a66').setFontColor('white');
+  let fTecG = `=IFERROR(QUERY(Seguimiento_de_contenido!A:Z; "select ${colResp}, count(${colResp}) where ${colResp} is not null ${filtroFechaQuery} group by ${colResp} order by count(${colResp}) desc label ${colResp} 'Técnico', count(${colResp}) 'Revisiones'"); "Sin datos")`;
+  hojaKPIs.getRange('A30').setFormula(fTecG);
+
+  let chart7 = hojaKPIs.newChart().setChartType(Charts.ChartType.PIE).addRange(hojaKPIs.getRange('A30:B40')).setPosition(29, 3, 0, 0).setOption('title', 'Participación % por Técnico').setOption('is3D', true).setOption('width', 350).setOption('height', 220).build();
+  hojaKPIs.insertChart(chart7);
+
+  hojaKPIs.getRange('G29:J29').merge().setValue('8. Análisis de Scrap (Equipos Dañados)').setFontWeight('bold').setBackground('#0d3a66').setFontColor('white');
+  let fScrap = `=IFERROR(QUERY(Seguimiento_de_contenido!A:Z; "select ${colCat}, ${colCod}, count(${colResp}) where ${colEst} = 'Dañado' ${filtroFechaQuery} group by ${colCat}, ${colCod} order by count(${colResp}) desc limit 10 label ${colCat} 'Categoría', ${colCod} 'Modelo', count(${colResp}) 'Scrap'"); "Sin Daños")`;
+  hojaKPIs.getRange('G30').setFormula(fScrap);
+
+  let chart8 = hojaKPIs.newChart().setChartType(Charts.ChartType.BAR).addRange(hojaKPIs.getRange('G30:I40')).setPosition(29, 10, 0, 0).setOption('title', 'Top 10 Scrap por Modelo').setOption('legend', {position: 'none'}).setOption('width', 300).setOption('height', 220).build();
+  hojaKPIs.insertChart(chart8);
+  
+  // Estética final KPI
+  hojaKPIs.setColumnWidth(1, 160); hojaKPIs.setColumnWidth(2, 90); hojaKPIs.setColumnWidth(3, 40);
+  hojaKPIs.setColumnWidth(4, 80);  hojaKPIs.setColumnWidth(5, 80); hojaKPIs.setColumnWidth(6, 40);
+  hojaKPIs.setColumnWidth(7, 140); hojaKPIs.setColumnWidth(8, 120); hojaKPIs.setColumnWidth(9, 60);
+  
+  SpreadsheetApp.getUi().alert('✅ Dashboard Directivo Generado.');
+}
+
+
+// ==========================================
+// NUEVO: MÉTRICAS DETALLADAS POR TÉCNICO
+// ==========================================
+function generarMetricasPorTecnico() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hojaDatos = ss.getSheetByName('Seguimiento_de_contenido');
+  
+  if (!hojaDatos) {
+    SpreadsheetApp.getUi().alert('Error: No se encontró "Seguimiento_de_contenido".');
+    return;
+  }
+  
+  // Mapeo Dinámico de Columnas
+  let colResp = obtenerLetraColumna(hojaDatos, 'Responsable') || 'A';
+  let colCat = obtenerLetraColumna(hojaDatos, 'Categoría') || 'F';
+  let colEst = obtenerLetraColumna(hojaDatos, 'Estado') || 'H';
+  let colFecha = obtenerLetraColumna(hojaDatos, 'Fecha de revisión') || 'G';
+
+  let hojaM = ss.getSheetByName('Metricas por tecnico');
+  if (!hojaM) {
+    hojaM = ss.insertSheet('Metricas por tecnico');
+  } else {
+    hojaM.clear();
+    let charts = hojaM.getCharts();
+    for (let i = 0; i < charts.length; i++) hojaM.removeChart(charts[i]);
+  }
+
+  // Título
+  hojaM.getRange('A1:L1').merge();
+  hojaM.getRange('A1').setValue('MÉTRICAS DETALLADAS POR TÉCNICO')
+       .setFontSize(16).setFontWeight('bold')
+       .setBackground('#0d3a66').setFontColor('white')
+       .setHorizontalAlignment('center');
+
+  // Filtros
+  hojaM.getRange('A3').setValue('Filtrar Periodo:').setFontWeight('bold');
+  const reglaFiltro = SpreadsheetApp.newDataValidation().requireValueInList(['Mes Actual', 'Bimestre', 'Semestre', 'Anual', 'Todo el Histórico'], true).build();
+  hojaM.getRange('B3').setDataValidation(reglaFiltro).setValue('Mes Actual').setBackground('#e8f0fe').setFontWeight('bold');
+  
+  hojaM.getRange('C2').setValue('Fecha Inicio');
+  hojaM.getRange('D2').setValue('Fecha Fin');
+  hojaM.getRange('C3').setFormula(`=IF(B3="Mes Actual"; DATE(YEAR(TODAY()); MONTH(TODAY()); 1); IF(B3="Bimestre"; DATE(YEAR(TODAY()); MONTH(TODAY())-1; 1); IF(B3="Semestre"; DATE(YEAR(TODAY()); MONTH(TODAY())-5; 1); IF(B3="Anual"; DATE(YEAR(TODAY()); 1; 1); DATE(2000; 1; 1)))))`).setNumberFormat("dd/MM/yyyy");
+  hojaM.getRange('D3').setFormula(`=IF(B3="Todo el Histórico"; DATE(2100; 12; 31); TODAY())`).setNumberFormat("dd/MM/yyyy");
+  hojaM.getRange('C2:D3').setBackground('#f4f6f9').setHorizontalAlignment('center');
+
+  // Desplegable de Técnicos
+  let listaTecnicos = [
+    "Alonso de Jesús Juan", "Ángel Lázaro Hernández", "Angel Vidal Parra", 
+    "Armando Moisés Gonzalez", "Arturo Lerma", "Cesar Guadalupe Rodriguez", 
+    "Daniel Namorado", "Eder Jovani Irineo", "Eliu Daniel Perez", 
+    "Joaquin Gomez", "Jony Ivan Hernández", "Nemecio Alejandro Berum", 
+    "Oscar Roberto Meza", "Oswaldo Johel Arroyo", "Raymundo Eduardo Perez"
+  ];
+  hojaM.getRange('A4').setValue('Seleccionar Técnico:').setFontWeight('bold');
+  const reglaTecnicos = SpreadsheetApp.newDataValidation().requireValueInList(listaTecnicos, true).build();
+  hojaM.getRange('B4').setDataValidation(reglaTecnicos).setValue(listaTecnicos[0]).setBackground('#e8f0fe').setFontWeight('bold');
+
+  let filtroFechaQuery = `and ${colFecha} >= date '"&TEXT(C3;"yyyy-mm-dd")&"' and ${colFecha} <= date '"&TEXT(D3;"yyyy-mm-dd")&"'`;
+
+  // ==========================================
+  // GRÁFICA 1: ESTADO Y CATEGORÍA INDIVIDUAL
+  // ==========================================
+  hojaM.getRange('A6:B6').merge().setValue('Desglose: Estado').setFontWeight('bold').setBackground('#f4f6f9');
+  let fEst = `=IF(ISBLANK(B4); "Selecciona Técnico"; IFERROR(QUERY(Seguimiento_de_contenido!A:Z; "select ${colEst}, count(${colResp}) where ${colResp} = '"&B4&"' ${filtroFechaQuery} group by ${colEst} label ${colEst} 'Estado', count(${colResp}) 'Cant.'"); "Sin datos"))`;
+  hojaM.getRange('A7').setFormula(fEst);
+
+  let c1A = hojaM.newChart().setChartType(Charts.ChartType.PIE).addRange(hojaM.getRange('A7:B13')).setPosition(6, 2, 0, 0).setOption('title', 'Estados de Revisión').setOption('is3D', true).setOption('width', 300).setOption('height', 200).build();
+  hojaM.insertChart(c1A);
+
+  hojaM.getRange('F6:G6').merge().setValue('Desglose: Categoría').setFontWeight('bold').setBackground('#f4f6f9');
+  let fCat = `=IF(ISBLANK(B4); "Selecciona Técnico"; IFERROR(QUERY(Seguimiento_de_contenido!A:Z; "select ${colCat}, count(${colResp}) where ${colResp} = '"&B4&"' ${filtroFechaQuery} group by ${colCat} label ${colCat} 'Categoría', count(${colResp}) 'Cant.'"); "Sin datos"))`;
+  hojaM.getRange('F7').setFormula(fCat);
+
+  let c1B = hojaM.newChart().setChartType(Charts.ChartType.BAR).addRange(hojaM.getRange('F7:G13')).setPosition(6, 7, 0, 0).setOption('title', 'Categorías Revisadas').setOption('legend', {position: 'none'}).setOption('width', 300).setOption('height', 200).build();
+  hojaM.insertChart(c1B);
+
+  // ==========================================
+  // GRÁFICA 2: INTEGRACIÓN (Categoría vs Estado Pivot)
+  // ==========================================
+  hojaM.getRange('A17:D17').merge().setValue('Categorías según Estado').setFontWeight('bold').setBackground('#f4f6f9');
+  let fPivot = `=IF(ISBLANK(B4); ""; IFERROR(QUERY(Seguimiento_de_contenido!A:Z; "select ${colCat}, count(${colResp}) where ${colResp} = '"&B4&"' ${filtroFechaQuery} group by ${colCat} pivot ${colEst}"); "Sin datos"))`;
+  hojaM.getRange('A18').setFormula(fPivot);
+
+  let c2 = hojaM.newChart().setChartType(Charts.ChartType.COLUMN).addRange(hojaM.getRange('A18:F25')).setPosition(17, 6, 0, 0)
+    .setOption('title', 'Categorías vs Estado (Desglose)')
+    .setOption('isStacked', true).setOption('width', 450).setOption('height', 250).build();
+  hojaM.insertChart(c2);
+
+  // ==========================================
+  // GRÁFICA 3: RELACIÓN TOTAL (Técnico vs Resto)
+  // ==========================================
+  hojaM.getRange('A30:B30').merge().setValue('Participación en Revisiones').setFontWeight('bold').setBackground('#f4f6f9');
+  hojaM.getRange('A31').setValue('Responsable'); hojaM.getRange('B31').setValue('Revisiones');
+  hojaM.getRange('A32').setFormula(`=IF(ISBLANK(B4); ""; B4)`);
+  hojaM.getRange('B32').setFormula(`=IF(ISBLANK(B4); 0; COUNTIFS(Seguimiento_de_contenido!${colResp}:${colResp}; B4; Seguimiento_de_contenido!${colFecha}:${colFecha}; ">="&C3; Seguimiento_de_contenido!${colFecha}:${colFecha}; "<="&D3))`);
+  hojaM.getRange('A33').setValue('Resto del Laboratorio');
+  hojaM.getRange('B33').setFormula(`=IF(ISBLANK(B4); 0; COUNTIFS(Seguimiento_de_contenido!${colFecha}:${colFecha}; ">="&C3; Seguimiento_de_contenido!${colFecha}:${colFecha}; "<="&D3) - B32)`);
+
+  let c3 = hojaM.newChart().setChartType(Charts.ChartType.PIE).addRange(hojaM.getRange('A31:B33')).setPosition(30, 2, 0, 0).setOption('title', 'Volumen de Revisiones (Aportación)').setOption('pieHole', 0.4).setOption('width', 300).setOption('height', 200).build();
+  hojaM.insertChart(c3);
+
+  // ==========================================
+  // GRÁFICA 4: ANÁLISIS DE SCRAP INDIVIDUAL
+  // ==========================================
+  hojaM.getRange('F30:G30').merge().setValue('Participación en Scrap (Dañados)').setFontWeight('bold').setBackground('#f4f6f9');
+  hojaM.getRange('F31').setValue('Responsable'); hojaM.getRange('G31').setValue('Scrap');
+  hojaM.getRange('F32').setFormula(`=IF(ISBLANK(B4); ""; B4)`);
+  hojaM.getRange('G32').setFormula(`=IF(ISBLANK(B4); 0; COUNTIFS(Seguimiento_de_contenido!${colResp}:${colResp}; B4; Seguimiento_de_contenido!${colEst}:${colEst}; "Dañado"; Seguimiento_de_contenido!${colFecha}:${colFecha}; ">="&C3; Seguimiento_de_contenido!${colFecha}:${colFecha}; "<="&D3))`);
+  hojaM.getRange('F33').setValue('Resto del Laboratorio');
+  hojaM.getRange('G33').setFormula(`=IF(ISBLANK(B4); 0; COUNTIFS(Seguimiento_de_contenido!${colEst}:${colEst}; "Dañado"; Seguimiento_de_contenido!${colFecha}:${colFecha}; ">="&C3; Seguimiento_de_contenido!${colFecha}:${colFecha}; "<="&D3) - G32)`);
+
+  let c4 = hojaM.newChart().setChartType(Charts.ChartType.PIE).addRange(hojaM.getRange('F31:G33')).setPosition(30, 7, 0, 0).setOption('title', 'Técnico vs Scrap General').setOption('pieHole', 0.4).setOption('colors', ['#dc3912', '#999999']).setOption('width', 300).setOption('height', 200).build();
+  hojaM.insertChart(c4);
+
+  // Estética
+  hojaM.setColumnWidth(1, 150); hojaM.setColumnWidth(2, 90); hojaM.setColumnWidth(6, 150); hojaM.setColumnWidth(7, 90);
+  
+  SpreadsheetApp.getUi().alert('✅ Hoja "Métricas por técnico" generada con éxito.');
+}
