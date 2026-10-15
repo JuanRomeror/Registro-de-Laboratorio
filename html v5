@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registro de Laboratorio - ON</title>
+  <style>
+    :root {
+      --primary-color: #0d3a66;
+      --bg-color: #f4f6f9;
+      --card-bg: #ffffff;
+      --text-main: #333333;
+      --border-color: #e0e0e0;
+      --btn-secondary: #e0e0e0;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 0;
+    }
+    .header {
+      background-color: var(--card-bg);
+      padding: 15px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid var(--primary-color);
+      margin-bottom: 20px;
+    }
+    .header h1 { margin: 0; color: var(--primary-color); font-size: 24px; }
+    .container { max-width: 900px; margin: 0 auto; padding: 0 15px; }
+    .card {
+      background: var(--card-bg);
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .card-header {
+      background-color: var(--primary-color);
+      color: white;
+      padding: 12px 20px;
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-body { padding: 20px; }
+    
+    /* Layout Utilities */
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group.full-width { grid-column: span 2; margin-bottom: 15px; }
+    
+    label { font-weight: 600; font-size: 13px; margin-bottom: 5px; color: var(--text-main); }
+    input, select, textarea {
+      padding: 10px; border: 1px solid var(--border-color);
+      border-radius: 4px; font-size: 14px; font-family: inherit; width: 100%; box-sizing: border-box;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary-color); }
+    
+    .radio-group { display: flex; gap: 20px; align-items: center; height: 38px; }
+    .radio-group label { display: flex; align-items: center; font-weight: normal; font-size: 14px; margin: 0; cursor: pointer; }
+    .radio-group input { margin-right: 8px; width: auto; cursor: pointer; }
+
+    /* Buttons */
+    .btn-submit {
+      background-color: var(--primary-color); color: white; border: none;
+      padding: 14px 25px; border-radius: 4px; font-size: 16px;
+      cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 40px; transition: 0.3s;
+    }
+    .btn-submit:hover { background-color: #092c4f; }
+    .btn-add {
+      background-color: var(--btn-secondary); color: var(--text-main);
+      border: 1px solid var(--border-color); padding: 5px 10px;
+      border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; display: flex; gap: 5px;
+    }
+    .btn-add:hover { background-color: #d0d0d0; }
+    .btn-remove {
+      background-color: #ff4d4d; color: white; border: none;
+      padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;
+    }
+    .btn-remove:hover { background-color: #cc0000; }
+
+    /* Refacciones Matrix */
+    .refaccion-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid var(--border-color); border-radius: 4px; margin-bottom: 8px; background: #fff;}
+    .refaccion-item label { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: normal; cursor: pointer; flex-grow: 1; }
+    .refaccion-item input[type="checkbox"] { width: 18px; height: 18px; }
+    .refaccion-item input[type="number"] { padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
+    
+    .refaccion-row { display: grid; grid-template-columns: 1fr 1fr 100px auto; gap: 10px; align-items: end; margin-bottom: 10px; }
+
+    /* Evidencias */
+    .file-upload-container {
+        border: 2px dashed var(--border-color); padding: 30px;
+        text-align: center; border-radius: 8px; background-color: #fafafa;
+    }
+    .file-upload-container:hover { border-color: var(--primary-color); background-color: #f0f8ff; }
+    input[type="file"] { display: none; }
+    .custom-file-upload {
+        display: inline-block; padding: 10px 20px; cursor: pointer;
+        background-color: var(--primary-color); color: white; border-radius: 4px; font-weight: bold;
+    }
+    #file-list { margin-top: 15px; font-size: 14px; color: #555; text-align: left; }
+    .file-item { margin-bottom: 5px; background: #e8f0fe; padding: 8px; border-radius: 4px;}
+
+    /* Full Screen Loader */
+    #full-screen-loader {
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(13, 58, 102, 0.95); z-index: 9999;
+        color: white; justify-content: center; align-items: center; flex-direction: column;
+        font-size: 24px; font-weight: bold; text-align: center;
+    }
+    .spinner {
+        border: 8px solid rgba(255,255,255,0.2); border-top: 8px solid #fff;
+        border-radius: 50%; width: 70px; height: 70px; animation: spin 1s linear infinite; margin-bottom: 25px;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    @media (max-width: 768px) {
+      .form-row, .form-row-3, .refaccion-row { grid-template-columns: 1fr; }
+      .refaccion-item { flex-direction: column; align-items: flex-start; gap: 15px; }
+      .refaccion-item .qty-container { width: 100%; display: flex; justify-content: space-between; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Registro de Laboratorio</h1>
+    <div style="font-weight:bold; color: var(--primary-color);">Operaciones del Norte</div>
+  </div>
+
+  <div id="full-screen-loader">
+    <div class="spinner"></div>
+    <div>Procesando y subiendo archivos...</div>
+    <div style="font-size: 16px; margin-top: 10px; font-weight: normal;">Por favor, espere. Esto puede tomar unos segundos.</div>
+  </div>
+
+  <div class="container">
+    <form id="labForm" onsubmit="enviarFormulario(event)">
+      
+      <!-- Datos Generales -->
+      <div class="card">
+        <div class="card-header">Datos Generales del Equipo</div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="responsable">Responsable Técnico</label>
+              <select id="responsable" name="responsable" required>
+                  <option value="">Seleccione al técnico...</option>
+                  <option value="Alonso de Jesús Juan">Alonso de Jesús Juan</option>
+                  <option value="Ángel Lázaro Hernández">Ángel Lázaro Hernández</option>
+                  <option value="Angel Vidal Parra">Angel Vidal Parra</option>
+                  <option value="Armando Moisés Gonzalez">Armando Moisés Gonzalez</option>
+                  <option value="Arturo Lerma">Arturo Lerma</option>
+                  <option value="Cesar Guadalupe Rodriguez">Cesar Guadalupe Rodriguez</option>
+                  <option value="Daniel Namorado">Daniel Namorado</option>
+                  <option value="Eder Jovani Irineo">Eder Jovani Irineo</option>
+                  <option value="Eliu Daniel Perez">Eliu Daniel Perez</option>
+                  <option value="Joaquin Gomez">Joaquin Gomez</option>
+                  <option value="Jony Ivan Hernández">Jony Ivan Hernández</option>
+                  <option value="Nemecio Alejandro Berum">Nemecio Alejandro Berum</option>
+                  <option value="Oscar Roberto Meza">Oscar Roberto Meza</option>
+                  <option value="Oswaldo Johel Arroyo">Oswaldo Johel Arroyo</option>
+                  <option value="Raymundo Eduardo Perez">Raymundo Eduardo Perez</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="laboratorio">Laboratorio</label>
+              <select id="laboratorio" name="laboratorio" required>
+                  <option value="">Seleccione...</option>
+                  <option value="Central">Central</option>
+                  <option value="Hermosillo">Hermosillo</option>
+                  <option value="Guadalajara">Guadalajara</option>
+                  <option value="León">León</option>
+                  <option value="Boca Del Río">Boca Del Río</option>
+                  <option value="Monterrey">Monterrey</option>
+                  <option value="Tijuana">Tijuana</option>
+                  <option value="Culiacán">Culiacán</option>
+                  <option value="Cancún">Cancún</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="codigo">Código (NAVISION / ON)</label>
+              <input type="text" id="codigo" name="codigo" required oninput="buscarCodigo(this.value)">
+            </div>
+            <div class="form-group">
+              <label for="codigoAnt">Código Anterior (Cuando aplique)</label>
+              <input type="text" id="codigoAnt" name="codigoAnt">
+            </div>
+          </div>
+
+          <div class="form-group full-width">
+            <label for="descripcion">Descripción</label>
+            <input type="text" id="descripcion" name="descripcion" placeholder="Escribe un Código válido para autocompletar la descripción..." required>
+          </div>
+
+          <div class="form-row-3">
+            <div class="form-group">
+              <label for="modelo">Modelo</label>
+              <input type="text" id="modelo" name="modelo" required>
+            </div>
+            <div class="form-group">
+              <label for="numSerie">Número de Serie del Equipo</label>
+              <input type="text" id="numSerie" name="numSerie" required>
+            </div>
+            <div class="form-group">
+              <label for="qr">QR</label>
+              <input type="text" id="qr" name="qr">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Garantía</label>
+              <div class="radio-group">
+                <label><input type="radio" name="garantia" value="Sí" required> Sí</label>
+                <label><input type="radio" name="garantia" value="No" required> No</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Consigna</label>
+              <div class="radio-group">
+                <label><input type="radio" name="consigna" value="Sí" required> Sí</label>
+                <label><input type="radio" name="consigna" value="No" required> No</label>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Diagnóstico y Estado -->
+      <div class="card">
+        <div class="card-header">Diagnóstico y Estado</div>
+        <div class="card-body">
+          <div class="form-row">
+              <div class="form-group">
+                <label for="categoria">Categoría</label>
+                <select id="categoria" name="categoria" required>
+                  <option value="">Seleccione...</option>
+                  <option value="Monitores">Monitores</option>
+                  <option value="Botoneras">Botoneras</option>
+                  <option value="Fuente de alimentacion">Fuente de alimentacion</option>
+                  <option value="Sistema de audio">Sistema de audio</option>
+                  <option value="Tarjetas electrónicas">Tarjetas electrónicas</option>
+                  <option value="Cableado">Cableado</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="fecha">Fecha de Revisión</label>
+                <input type="date" id="fecha" name="fecha" required>
+              </div>
+          </div>
+          
+          <div class="form-row">
+              <div class="form-group">
+                <label for="estado">Estado</label>
+                <select id="estado" name="estado" required>
+                  <option value="">Seleccione...</option>
+                  <option value="Nuevo">Nuevo</option>
+                  <option value="En revisión">En revisión</option>
+                  <option value="Dañado">Dañado</option>
+                  <option value="Reparado">Reparado</option>
+                  <option value="En espera de refacción">En espera de refacción</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="procedencia">Procedencia</label>
+                <select id="procedencia" name="procedencia" required>
+                  <option value="">Seleccione...</option>
+                  <option value="Operación">Operación</option>
+                  <option value="Producción">Producción</option>
+                  <option value="Almacén">Almacén</option>
+                  <option value="Devoluciones">Devoluciones</option>
+                </select>
+              </div>
+          </div>
+
+          <div class="form-group full-width">
+            <label for="detalles">Detalles (Comentarios)</label>
+            <textarea id="detalles" name="detalles" rows="3"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Refacciones Dinámicas -->
+      <div class="card">
+        <div class="card-header">Solución y Refacciones Utilizadas</div>
+        <div class="card-body">
+            <div class="form-group full-width">
+              <label for="solucion">Solución de la falla</label>
+              <textarea id="solucion" name="solucion" rows="3" placeholder="Describe la solución aplicada..." required></textarea>
+            </div>
+            
+            <div class="form-group full-width">
+                <label>Refacciones del Componente (Catálogo)</label>
+                <div id="refacciones-matrix" style="padding: 15px; background: #f4f6f9; border: 1px solid var(--border-color); border-radius: 4px; min-height: 40px; margin-bottom: 20px;">
+                    <span style="color: #666; font-size: 14px;">Ingresa un Código (NAVISION / ON) arriba para buscar e importar las refacciones...</span>
+                </div>
+            </div>
+
+            <div class="form-group full-width">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 15px; margin-bottom: 10px;">
+                    <label style="margin: 0; color: var(--primary-color);">Refacciones Adicionales (Manuales)</label>
+                    <button type="button" class="btn-add" onclick="agregarRefaccionManual()">
+                        <span style="font-size:18px; font-weight:bold;">+</span> Agregar
+                    </button>
+                </div>
+                <div id="refacciones-extra"></div>
+            </div>
+        </div>
+      </div>
+
+      <!-- Carga de Archivos -->
+      <div class="card">
+        <div class="card-header">Evidencias Fotográficas / Documentos</div>
+        <div class="card-body full-width">
+            <button type="button" id="btn-activar-evidencia" onclick="activarEvidencias()" style="background-color: var(--btn-secondary); color: var(--text-main); border: 1px solid var(--border-color); padding: 12px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; font-size: 15px;">
+                📸 Activar Carga de Evidencias (Fotografías / Docs)
+            </button>
+
+            <div id="seccion-evidencias" class="file-upload-container" style="display: none;">
+                <label class="custom-file-upload">
+                    <input type="file" id="archivos" multiple onchange="mostrarArchivos()">
+                    📁 Seleccionar Archivos
+                </label>
+                <p style="margin-top:10px; color:#666;">Selecciona imágenes o documentos para respaldar el registro de la reparación.</p>
+                <div id="file-list"></div>
+            </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit" id="btnSubmit">Guardar Registro y Subir Evidencias</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('fecha').valueAsDate = new Date();
+    
+    let extraRefCount = 0;
+    let selectedFiles = [];
+    let searchTimer;
+
+    // Lógica del filtro de Refacciones (Catálogo)
+    function buscarCodigo(val) {
+       clearTimeout(searchTimer);
+       const matrix = document.getElementById('refacciones-matrix');
+       const descInput = document.getElementById('descripcion');
+       
+       if (!val) {
+          descInput.value = '';
+          matrix.innerHTML = '<span style="color: #666; font-size: 14px;">Ingresa un Código (NAVISION / ON) arriba para buscar e importar las refacciones...</span>';
+          return;
+       }
+       
+       matrix.innerHTML = '<span style="color: #0d3a66; font-weight: bold;">Buscando en el catálogo de Zitro...</span>';
+       
+       searchTimer = setTimeout(() => {
+           google.script.run
+            .withSuccessHandler(function(res) {
+                // Auto-llenar la descripción si la encuentra
+                if(res.descripcion) {
+                   descInput.value = res.descripcion;
+                }
+                
+                // Dibujar la matriz de refacciones
+                if (res.refacciones && res.refacciones.length > 0) {
+                    matrix.innerHTML = '';
+                    res.refacciones.forEach((r, i) => {
+                        const div = document.createElement('div');
+                        div.className = 'refaccion-item';
+                        div.innerHTML = `
+                          <label>
+                            <input type="checkbox" id="chk_cat_${i}" value="${r.codigo}" onchange="toggleCantidad('cant_cat_${i}')">
+                            <span><strong>${r.codigo}</strong><br><small style="color: #555;">${r.descripcion}</small></span>
+                          </label>
+                          <input type="hidden" id="desc_cat_${i}" value="${r.descripcion}">
+                          <div class="qty-container" style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 13px; font-weight: bold; color: #444;">Cantidad:</span>
+                            <input type="number" id="cant_cat_${i}" disabled min="1" style="width: 80px;" placeholder="---">
+                          </div>
+                        `;
+                        matrix.appendChild(div);
+                    });
+                } else {
+                    matrix.innerHTML = '<span style="color: #888; font-size: 14px;">No se encontraron refacciones asociadas para este código en el catálogo maestro. Usa el botón inferior para agregarlas manualmente.</span>';
+                }
+            })
+            .obtenerDatosCatalogo(val);
+       }, 500); // 500ms de retraso para no saturar al teclear
+    }
+
+    function toggleCantidad(id) {
+       const cantInput = document.getElementById(id);
+       cantInput.disabled = !cantInput.disabled;
+       if(!cantInput.disabled) {
+           cantInput.focus();
+           cantInput.required = true;
+           cantInput.placeholder = "0";
+       } else {
+           cantInput.value = '';
+           cantInput.required = false;
+           cantInput.placeholder = "---";
+       }
+    }
+
+    // Lógica para agregar refacciones manualmente
+    function agregarRefaccionManual() {
+        extraRefCount++;
+        const container = document.getElementById('refacciones-extra');
+        
+        const row = document.createElement('div');
+        row.className = 'refaccion-row';
+        row.id = `ref-extra-${extraRefCount}`;
+        
+        row.innerHTML = `
+            <div class="form-group">
+                <label>Código R.</label>
+                <input type="text" name="extra_cod_${extraRefCount}" required>
+            </div>
+            <div class="form-group">
+                <label>Descripción</label>
+                <input type="text" name="extra_desc_${extraRefCount}" required>
+            </div>
+            <div class="form-group">
+                <label>Cantidad</label>
+                <input type="number" name="extra_cant_${extraRefCount}" min="1" required>
+            </div>
+            <button type="button" class="btn-remove" onclick="document.getElementById('ref-extra-${extraRefCount}').remove()">X</button>
+        `;
+        
+        container.appendChild(row);
+    }
+
+    // Lógica para las Evidencias
+    function activarEvidencias() {
+       document.getElementById('btn-activar-evidencia').style.display = 'none';
+       document.getElementById('seccion-evidencias').style.display = 'block';
+    }
+
+    function mostrarArchivos() {
+        const input = document.getElementById('archivos');
+        const list = document.getElementById('file-list');
+        list.innerHTML = '';
+        selectedFiles = Array.from(input.files);
+        
+        if(selectedFiles.length > 0) {
+            let html = '<strong>Archivos seleccionados:</strong><br>';
+            selectedFiles.forEach((file) => {
+                html += `<div class="file-item">✓ ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)</div>`;
+            });
+            list.innerHTML = html;
+        }
+    }
+
+    // Enviar el formulario y compilar datos
+    function enviarFormulario(e) {
+      e.preventDefault();
+      const form = document.getElementById('labForm');
+      const formData = new FormData(form);
+      
+      const datos = {
+          responsable: formData.get('responsable'),
+          laboratorio: formData.get('laboratorio'),
+          codigo: formData.get('codigo'),
+          codigoAnt: formData.get('codigoAnt'),
+          descripcion: formData.get('descripcion'),
+          modelo: formData.get('modelo'),
+          numSerie: formData.get('numSerie'),
+          qr: formData.get('qr'),
+          garantia: formData.get('garantia'),
+          consigna: formData.get('consigna'),
+          categoria: formData.get('categoria'),
+          fecha: formData.get('fecha'),
+          estado: formData.get('estado'),
+          procedencia: formData.get('procedencia'),
+          detalles: formData.get('detalles'),
+          solucion: formData.get('solucion'),
+          refacciones: []
+      };
+
+      // 1. Recolectar refacciones del Catálogo (Checkbox Matrix)
+      const matrixItems = document.querySelectorAll('#refacciones-matrix .refaccion-item');
+      matrixItems.forEach((item, i) => {
+          const chk = document.getElementById(`chk_cat_${i}`);
+          if (chk && chk.checked) {
+              datos.refacciones.push({
+                  codigo: chk.value,
+                  descripcion: document.getElementById(`desc_cat_${i}`).value,
+                  cantidad: document.getElementById(`cant_cat_${i}`).value
+              });
+          }
+      });
+
+      // 2. Recolectar refacciones Extras (Manuales)
+      for(let i=1; i<=extraRefCount; i++) {
+          const elemCod = document.querySelector(`input[name="extra_cod_${i}"]`);
+          if(elemCod) {
+              datos.refacciones.push({
+                  codigo: elemCod.value,
+                  descripcion: document.querySelector(`input[name="extra_desc_${i}"]`).value,
+                  cantidad: document.querySelector(`input[name="extra_cant_${i}"]`).value
+              });
+          }
+      }
+
+      // Activar pantalla de carga full screen
+      document.getElementById('btnSubmit').disabled = true;
+      document.getElementById('full-screen-loader').style.display = 'flex';
+
+      // Procesar Base64 de las imágenes si las hay
+      if(selectedFiles.length > 0) {
+          let filesRead = 0;
+          let fileDataArray = [];
+
+          selectedFiles.forEach(file => {
+              const reader = new FileReader();
+              reader.onload = function(e) {
+                  fileDataArray.push({
+                      filename: file.name,
+                      mimeType: file.type,
+                      bytes: e.target.result.split(',')[1]
+                  });
+                  filesRead++;
+                  
+                  if(filesRead === selectedFiles.length) {
+                      datos.archivosBase64 = fileDataArray;
+                      llamarBackend(datos);
+                  }
+              };
+              reader.readAsDataURL(file);
+          });
+      } else {
+          datos.archivosBase64 = [];
+          llamarBackend(datos);
+      }
+    }
+
+function llamarBackend(datos) {
+        google.script.run
+        .withSuccessHandler(function(response) {
+           if(response.success) {
+             alert('Registro guardado exitosamente.\nCarpeta de evidencias generada:\n' + response.urlCarpeta);
+             
+             // REINICIO SEGURO E INSTANTÁNEO (SIN USAR RELOAD)
+             document.getElementById('labForm').reset();
+             document.getElementById('fecha').valueAsDate = new Date();
+             
+             // Limpiar zonas dinámicas
+             document.getElementById('refacciones-matrix').innerHTML = '<span style="color: #666; font-size: 14px;">Ingresa un Código (NAVISION / ON) arriba para buscar e importar las refacciones...</span>';
+             document.getElementById('refacciones-extra').innerHTML = '';
+             document.getElementById('file-list').innerHTML = '';
+             
+             // Resetear variables internas y botones
+             selectedFiles = [];
+             extraRefCount = 0;
+             document.getElementById('btnSubmit').disabled = false;
+             document.getElementById('full-screen-loader').style.display = 'none';
+             
+             // Regresar la pantalla hasta arriba para el siguiente registro
+             window.scrollTo({ top: 0, behavior: 'smooth' });
+             
+           } else {
+             alert('Error al guardar: ' + response.error);
+             document.getElementById('btnSubmit').disabled = false;
+             document.getElementById('full-screen-loader').style.display = 'none';
+           }
+        })
+        .withFailureHandler(function(error) {
+           alert('Ocurrió un error de conexión con Google Scripts.');
+           document.getElementById('btnSubmit').disabled = false;
+           document.getElementById('full-screen-loader').style.display = 'none';
+        })
+        .procesarFormulario(datos);
+    }
+  </script>
+</body>
+</html>
